@@ -19,35 +19,15 @@ function getDatesForWeek(startDateStr) {
 
 availabilityRoutes.get('/weekly', async (req, res) => {
   try {
-    const { weekStart, userId, mentorId } = req.query;
+    const { userId, mentorId } = req.query;
     const targetId = userId || mentorId || req.user.id;
     
-    // Fetch day_of_week schedule
     const result = await query(
       'SELECT day_of_week, start_time, end_time FROM availability WHERE owner_id = $1',
       [targetId]
     );
 
-    const dates = weekStart ? getDatesForWeek(weekStart) : [];
-    const availability = {};
-    
-    // Convert day_of_week rules to specific dates for the frontend calendar
-    if (dates.length > 0) {
-      dates.forEach((dateStr, i) => {
-        availability[dateStr] = result.rows
-          .filter(r => r.day_of_week === i)
-          .map(r => ({
-            startTime: `${dateStr}T${r.start_time}Z`,
-            endTime: `${dateStr}T${r.end_time}Z`
-          }));
-      });
-    }
-
-    res.json({
-      dates,
-      availability,
-      hasTemplate: true // Always true since we only use recurring weekly schedule now
-    });
+    res.json(result.rows);
   } catch (error) {
     console.error(error);
     res.status(500).json({ error: 'Server error' });
@@ -56,42 +36,34 @@ availabilityRoutes.get('/weekly', async (req, res) => {
 
 availabilityRoutes.post('/batch', async (req, res) => {
   try {
-    const { pattern } = req.body; // { dayOfWeek, hour }
-    // We only support 'template' scope now (recurring weekly)
+    const { slots } = req.body;
     
     await query('BEGIN');
     await query('DELETE FROM availability WHERE owner_id = $1', [req.user.id]);
     
-    if (pattern && pattern.length > 0) {
-      for (const slot of pattern) {
-        const start_time = `${slot.hour.toString().padStart(2, '0')}:00:00`;
-        const end_time = `${(slot.hour + 1).toString().padStart(2, '0')}:00:00`;
+    if (slots && slots.length > 0) {
+      for (const slot of slots) {
+        // slot has { day_of_week, start_time, end_time } based on our frontend
+        let st = slot.start_time;
+        let et = slot.end_time;
+        // ensure format HH:MM:SS
+        if (st.length === 5) st = st + ':00';
+        if (et.length === 5) et = et + ':00';
         
         await query(
           'INSERT INTO availability (owner_id, owner_role, day_of_week, start_time, end_time) VALUES ($1, $2, $3, $4, $5) ON CONFLICT DO NOTHING',
-          [req.user.id, req.user.role, slot.dayOfWeek, start_time, end_time]
+          [req.user.id, req.user.role, slot.day_of_week, st, et]
         );
       }
     }
     await query('COMMIT');
 
-    // Return the updated weekly view just like GET /weekly
     const result = await query(
       'SELECT day_of_week, start_time, end_time FROM availability WHERE owner_id = $1',
       [req.user.id]
     );
-    const dates = getDatesForWeek(req.body.weekStart || new Date().toISOString().split('T')[0]);
-    const availability = {};
-    dates.forEach((dateStr, i) => {
-      availability[dateStr] = result.rows
-        .filter(r => r.day_of_week === i)
-        .map(r => ({
-          startTime: `${dateStr}T${r.start_time}Z`,
-          endTime: `${dateStr}T${r.end_time}Z`
-        }));
-    });
 
-    res.json({ dates, availability, hasTemplate: true });
+    res.json(result.rows);
   } catch (error) {
     await query('ROLLBACK');
     console.error(error);
