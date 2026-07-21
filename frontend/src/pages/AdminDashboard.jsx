@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { get, post } from "../api/client";
+import BookingsList from "../components/BookingsList";
 
 export default function AdminDashboard() {
   const [requests, setRequests] = useState([]);
@@ -8,10 +9,29 @@ export default function AdminDashboard() {
   const [loadingRecs, setLoadingRecs] = useState(false);
   const [bookingStatus, setBookingStatus] = useState("");
   const [activeBookingId, setActiveBookingId] = useState(null);
+  const [activeTab, setActiveTab] = useState("pending");
+  const [bookings, setBookings] = useState([]);
+  const [loadingBookings, setLoadingBookings] = useState(false);
 
   useEffect(() => {
-    fetchRequests();
-  }, []);
+    if (activeTab === 'pending') {
+      fetchRequests();
+    } else {
+      fetchBookings();
+    }
+  }, [activeTab]);
+
+  const fetchBookings = async () => {
+    setLoadingBookings(true);
+    try {
+      const data = await get("/api/bookings");
+      setBookings(data);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setLoadingBookings(false);
+    }
+  };
 
   const fetchRequests = async () => {
     try {
@@ -65,14 +85,31 @@ export default function AdminDashboard() {
 
   return (
     <div className="max-w-[1400px] mx-auto py-8 px-4 sm:px-6 lg:px-8 flex flex-col h-[calc(100vh-64px)]">
-      <div className="mb-6 flex-shrink-0">
-        <h1 className="text-3xl mq-heading font-semibold">Admin Dashboard</h1>
-        <p className="text-sm text-ink-muted mt-1">Review pending call requests and match users with recommended mentors.</p>
+      <div className="mb-6 flex-shrink-0 flex justify-between items-end">
+        <div>
+          <h1 className="text-3xl mq-heading font-semibold">Admin Dashboard</h1>
+          <p className="text-sm text-ink-muted mt-1">Review pending call requests and manage scheduled sessions.</p>
+        </div>
+        <div className="flex bg-paper-subtle p-1 rounded-sm border border-border shadow-sm">
+          <button
+            onClick={() => setActiveTab('pending')}
+            className={`px-4 py-2 rounded-sm text-sm font-semibold transition-colors ${activeTab === 'pending' ? 'bg-surface shadow-sm text-ink' : 'text-ink-muted hover:text-ink'}`}
+          >
+            Pending Requests
+          </button>
+          <button
+            onClick={() => setActiveTab('scheduled')}
+            className={`px-4 py-2 rounded-sm text-sm font-semibold transition-colors ${activeTab === 'scheduled' ? 'bg-surface shadow-sm text-ink' : 'text-ink-muted hover:text-ink'}`}
+          >
+            Scheduled Sessions
+          </button>
+        </div>
       </div>
 
-      <div className="flex-1 flex gap-6 overflow-hidden">
-        
-        {/* Pending Requests List */}
+      {activeTab === 'pending' ? (
+        <div className="flex-1 flex gap-6 overflow-hidden">
+          
+          {/* Pending Requests List */}
         <div className="w-1/3 flex flex-col bg-surface border border-border shadow-sm rounded-sm">
           <div className="p-4 border-b border-border bg-paper-subtle">
             <h2 className="mq-mono-label text-ink-muted">
@@ -213,6 +250,15 @@ export default function AdminDashboard() {
           </div>
         </div>
       </div>
+      ) : (
+        <div className="flex-1 overflow-y-auto max-w-4xl mq-scroll pr-4">
+          {loadingBookings ? (
+            <div className="text-center text-sm text-ink-muted mt-10">Loading bookings...</div>
+          ) : (
+            <BookingsList bookings={bookings} role="admin" emptyMessage="No calls have been scheduled yet." />
+          )}
+        </div>
+      )}
     </div>
   );
 }

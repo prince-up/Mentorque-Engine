@@ -1,12 +1,30 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import AvailabilityDashboard from "../components/AvailabilityDashboard";
-import { post } from "../api/client";
+import { post, get } from "../api/client";
+import BookingsList from "../components/BookingsList";
 
 export default function UserAvailability() {
   const [callType, setCallType] = useState("resume_revamp");
   const [description, setDescription] = useState("");
   const [status, setStatus] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [bookings, setBookings] = useState([]);
+  const [loadingBookings, setLoadingBookings] = useState(true);
+
+  useEffect(() => {
+    fetchBookings();
+  }, []);
+
+  const fetchBookings = async () => {
+    try {
+      const data = await get("/api/bookings");
+      setBookings(data);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setLoadingBookings(false);
+    }
+  };
 
   const submitCallRequest = async (e) => {
     e.preventDefault();
@@ -32,8 +50,23 @@ export default function UserAvailability() {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start">
-        <div className="lg:col-span-2">
-          <AvailabilityDashboard role="user" />
+        <div className="lg:col-span-2 space-y-8">
+          <div>
+            <h2 className="text-xl mq-heading font-semibold text-ink mb-4">Your Schedule</h2>
+            <AvailabilityDashboard role="user" />
+          </div>
+          <div>
+            <h2 className="text-xl mq-heading font-semibold text-ink mb-4">Scheduled Calls</h2>
+            {loadingBookings ? (
+              <div className="text-sm text-ink-muted">Loading bookings...</div>
+            ) : (
+              <BookingsList 
+                bookings={bookings} 
+                role="user" 
+                emptyMessage="No calls scheduled yet. Once an admin books you with a mentor, it'll show up here." 
+              />
+            )}
+          </div>
         </div>
         
         {/* Request Call Form */}
