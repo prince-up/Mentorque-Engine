@@ -190,5 +190,6 @@ export default function UserAvailability() {
         </div>
       </div>
     </div>
+    </div>
   );
 }
