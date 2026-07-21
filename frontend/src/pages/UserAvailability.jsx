@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import AvailabilityDashboard from "../components/AvailabilityDashboard";
-import { post, get } from "../api/client";
+import { post, get, put } from "../api/client";
 import BookingsList from "../components/BookingsList";
 
 export default function UserAvailability() {
@@ -10,10 +10,44 @@ export default function UserAvailability() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [bookings, setBookings] = useState([]);
   const [loadingBookings, setLoadingBookings] = useState(true);
+  const [profile, setProfile] = useState({ tags: "", description: "" });
+  const [profileSaveStatus, setProfileSaveStatus] = useState("");
+  const [loadingProfile, setLoadingProfile] = useState(true);
 
   useEffect(() => {
     fetchBookings();
+    fetchProfile();
   }, []);
+
+  const fetchProfile = async () => {
+    try {
+      const data = await get("/api/profile");
+      setProfile({
+        tags: data.tags ? data.tags.join(", ") : "",
+        description: data.description || ""
+      });
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setLoadingProfile(false);
+    }
+  };
+
+  const handleSaveProfile = async (e) => {
+    e.preventDefault();
+    setProfileSaveStatus("Saving...");
+    try {
+      const tagsArray = profile.tags.split(",").map(t => t.trim()).filter(Boolean);
+      await put("/api/profile", {
+        tags: tagsArray,
+        description: profile.description
+      });
+      setProfileSaveStatus("Profile saved successfully.");
+      setTimeout(() => setProfileSaveStatus(""), 4000);
+    } catch (err) {
+      setProfileSaveStatus("Error saving profile.");
+    }
+  };
 
   const fetchBookings = async () => {
     try {
@@ -69,12 +103,50 @@ export default function UserAvailability() {
           </div>
         </div>
         
-        {/* Request Call Form */}
-        <div className="mq-card p-6 sticky top-8">
-          <div className="mb-6">
-            <h2 className="text-lg mq-heading font-semibold">Request a Call</h2>
-            <p className="text-sm text-ink-muted mt-1">Submit a request to be matched with a mentor.</p>
+        {/* Right Column: Profile & Request */}
+        <div className="space-y-8 sticky top-8">
+          <div className="mq-card p-6">
+            <div className="mb-6">
+              <h2 className="text-lg mq-heading font-semibold">Your Profile</h2>
+              <p className="text-sm text-ink-muted mt-1">Update your tags and description.</p>
+            </div>
+            {loadingProfile ? (
+              <div className="text-sm text-ink-muted">Loading profile...</div>
+            ) : (
+              <form onSubmit={handleSaveProfile} className="space-y-4">
+                <div className="space-y-1.5">
+                  <label className="block text-xs font-semibold text-ink uppercase tracking-wider">Tags (comma separated)</label>
+                  <input
+                    type="text"
+                    value={profile.tags}
+                    onChange={e => setProfile({...profile, tags: e.target.value})}
+                    className="mq-input w-full"
+                    placeholder="e.g. tech, good communication"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <label className="block text-xs font-semibold text-ink uppercase tracking-wider">Description</label>
+                  <textarea
+                    value={profile.description}
+                    onChange={e => setProfile({...profile, description: e.target.value})}
+                    className="mq-input w-full h-24 resize-none"
+                  />
+                </div>
+                <button type="submit" className="mq-btn-secondary w-full mt-2">Save Profile</button>
+                {profileSaveStatus && (
+                  <div className={`mt-2 text-sm font-medium ${profileSaveStatus.includes("Error") ? 'text-danger' : 'text-teal'}`}>
+                    {profileSaveStatus}
+                  </div>
+                )}
+              </form>
+            )}
           </div>
+
+          <div className="mq-card p-6">
+            <div className="mb-6">
+              <h2 className="text-lg mq-heading font-semibold">Request a Call</h2>
+              <p className="text-sm text-ink-muted mt-1">Submit a request to be matched with a mentor.</p>
+            </div>
           
           <form onSubmit={submitCallRequest} className="space-y-4">
             <div className="space-y-1.5">

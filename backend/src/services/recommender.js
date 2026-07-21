@@ -3,7 +3,7 @@ import { query } from '../db.js';
 
 let extractor = null;
 
-async function getExtractor() {
+export async function getExtractor() {
   if (!extractor) {
     extractor = await pipeline('feature-extraction', 'Xenova/all-MiniLM-L6-v2');
   }

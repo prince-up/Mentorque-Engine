@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
-import { get, post } from "../api/client";
+import { Link } from "react-router-dom";
+import { get, post, put } from "../api/client";
 import BookingsList from "../components/BookingsList";
 
 export default function AdminDashboard() {
@@ -12,14 +13,58 @@ export default function AdminDashboard() {
   const [activeTab, setActiveTab] = useState("pending");
   const [bookings, setBookings] = useState([]);
   const [loadingBookings, setLoadingBookings] = useState(false);
+  const [mentors, setMentors] = useState([]);
+  const [loadingMentors, setLoadingMentors] = useState(false);
+  const [selectedMentor, setSelectedMentor] = useState(null);
+  const [mentorForm, setMentorForm] = useState({ tags: "", description: "" });
+  const [mentorSaveStatus, setMentorSaveStatus] = useState("");
 
   useEffect(() => {
     if (activeTab === 'pending') {
       fetchRequests();
-    } else {
+    } else if (activeTab === 'scheduled') {
       fetchBookings();
+    } else if (activeTab === 'mentors') {
+      fetchMentors();
     }
   }, [activeTab]);
+
+  const fetchMentors = async () => {
+    setLoadingMentors(true);
+    try {
+      const data = await get("/api/admin/mentors");
+      setMentors(data);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setLoadingMentors(false);
+    }
+  };
+
+  const handleSelectMentor = (mentor) => {
+    setSelectedMentor(mentor);
+    setMentorForm({
+      tags: mentor.tags ? mentor.tags.join(", ") : "",
+      description: mentor.description || ""
+    });
+    setMentorSaveStatus("");
+  };
+
+  const handleSaveMentorProfile = async (e) => {
+    e.preventDefault();
+    setMentorSaveStatus("Saving...");
+    try {
+      const tagsArray = mentorForm.tags.split(",").map(t => t.trim()).filter(Boolean);
+      await put(`/api/admin/mentors/${selectedMentor.id}/profile`, {
+        tags: tagsArray,
+        description: mentorForm.description
+      });
+      setMentorSaveStatus("Profile updated and vector regenerated successfully.");
+      fetchMentors();
+    } catch (err) {
+      setMentorSaveStatus("Error updating profile.");
+    }
+  };
 
   const fetchBookings = async () => {
     setLoadingBookings(true);
@@ -103,10 +148,76 @@ export default function AdminDashboard() {
           >
             Scheduled Sessions
           </button>
+          <button
+            onClick={() => setActiveTab('mentors')}
+            className={`px-4 py-2 rounded-sm text-sm font-semibold transition-colors ${activeTab === 'mentors' ? 'bg-surface shadow-sm text-ink' : 'text-ink-muted hover:text-ink'}`}
+          >
+            Mentor Profiles
+          </button>
         </div>
       </div>
 
-      {activeTab === 'pending' ? (
+      {activeTab === 'mentors' ? (
+        <div className="flex-1 flex gap-6 overflow-hidden">
+          <div className="w-1/3 flex flex-col bg-surface border border-border shadow-sm rounded-sm">
+            <div className="p-4 border-b border-border bg-paper-subtle">
+              <h2 className="mq-mono-label text-ink-muted">Mentors ({mentors.length})</h2>
+            </div>
+            <div className="flex-1 overflow-y-auto mq-scroll">
+              <div className="divide-y divide-border">
+                {mentors.map(m => (
+                  <div 
+                    key={m.id} 
+                    className={`p-4 cursor-pointer transition-colors duration-150 ${selectedMentor?.id === m.id ? 'bg-teal-light border-l-2 border-l-teal' : 'bg-surface hover:bg-paper-subtle border-l-2 border-l-transparent'}`}
+                    onClick={() => handleSelectMentor(m)}
+                  >
+                    <div className="text-sm font-semibold text-ink mb-1">{m.name}</div>
+                    <div className="text-xs text-ink-muted">{m.email}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+          
+          <div className="w-2/3 flex flex-col bg-paper border border-border shadow-sm rounded-sm overflow-hidden relative">
+            <div className="p-4 border-b border-border bg-surface">
+              <h2 className="mq-mono-label text-ink-muted">Edit Metadata</h2>
+            </div>
+            <div className="flex-1 overflow-y-auto mq-scroll p-6">
+              {!selectedMentor ? (
+                <div className="text-center text-ink-muted text-sm mt-10">Select a mentor to edit their profile.</div>
+              ) : (
+                <form onSubmit={handleSaveMentorProfile} className="space-y-4 max-w-xl">
+                  <div className="space-y-1.5">
+                    <label className="block text-xs font-semibold text-ink uppercase tracking-wider">Tags (comma separated)</label>
+                    <input 
+                      type="text" 
+                      value={mentorForm.tags} 
+                      onChange={e => setMentorForm({...mentorForm, tags: e.target.value})}
+                      className="mq-input w-full"
+                      placeholder="e.g. big_tech, senior developer, frontend"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="block text-xs font-semibold text-ink uppercase tracking-wider">Description</label>
+                    <textarea 
+                      value={mentorForm.description} 
+                      onChange={e => setMentorForm({...mentorForm, description: e.target.value})}
+                      className="mq-input w-full h-32 resize-none"
+                    />
+                  </div>
+                  <button type="submit" className="mq-btn-primary">Save Profile</button>
+                  {mentorSaveStatus && (
+                    <div className={`mt-4 text-sm font-medium ${mentorSaveStatus.includes('Error') ? 'text-danger' : 'text-teal'}`}>
+                      {mentorSaveStatus}
+                    </div>
+                  )}
+                </form>
+              )}
+            </div>
+          </div>
+        </div>
+      ) : activeTab === 'pending' ? (
         <div className="flex-1 flex gap-6 overflow-hidden">
           
           {/* Pending Requests List */}
@@ -201,9 +312,17 @@ export default function AdminDashboard() {
                       <div className="p-5 bg-paper-subtle">
                         <h4 className="mq-mono-label text-ink-muted mb-4">Overlap Moments</h4>
                         {(!mentor.overlaps || mentor.overlaps.length === 0) ? (
-                          <p className="text-sm text-ink-muted">
-                            No overlapping availability found.
-                          </p>
+                          <div className="flex flex-col items-start gap-2">
+                            <p className="text-sm text-ink-muted">
+                              No overlapping availability found.
+                            </p>
+                            <Link 
+                              to="/admin/schedules" 
+                              className="text-xs font-semibold text-teal hover:text-teal-dark underline underline-offset-2 transition-colors"
+                            >
+                              View full schedule to coordinate manually &rarr;
+                            </Link>
+                          </div>
                         ) : (
                           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                             {mentor.overlaps.map((ov, i) => {
